@@ -24,7 +24,8 @@ Winter 2017 - ZJW (Piddington texture write)
 using namespace std;
 using namespace glm;
 
-#define NUM_SEGMENTS 10
+#define NUM_SEGMENTS 62832
+#define NUM_SHADERS 3
 
 class Application : public EventCallbacks
 {
@@ -41,8 +42,12 @@ public:
 
 
 
-	std::shared_ptr<Program> sphere;
+	std::shared_ptr<Program> prog1;
+	std::shared_ptr<Program> prog2;
+	std::shared_ptr<Program> prog3;
 
+
+	std::shared_ptr<Program> progs[NUM_SHADERS];
 	GLuint VertexArrayID;
 	GLuint VertexBufferID;  
 	GLuint NormalBufferID;  
@@ -136,33 +141,26 @@ public:
 		glViewport(0, 0, width, height);
 	}
 
-	void initSphere(GLfloat *vertexBuf, GLfloat *normalBuf, GLuint *indexBuf) {
+	float r(float theta ) {
+		return 1;
+	}
+	void initprog1(GLfloat *vertexBuf, GLfloat *normalBuf, GLuint *indexBuf) {
 		
 		float two_pi = 2.0f * M_PI;
 		
-		int ndx = 0;
+		float rad;
 		// Generate the verticed around the circle
 		int t = 0;
 		int k = 0;
-		for (ndx = 0; ndx < NUM_SEGMENTS; ndx++) {
-			vertexBuf[t*3 + 0] = ndx;
-			vertexBuf[t*3 + 1] = ndx;
+		for (float theta = 0; theta < 2 * M_PI; theta += 0.0001) {
+			vertexBuf[t*3 + 0] = theta;
+			vertexBuf[t*3 + 1] = theta;
 			vertexBuf[t*3 + 2] = 1;
 			std::cout << vertexBuf[t*3 + 0] << ", " << vertexBuf[t*3 + 1] << ", " << vertexBuf[t*3 + 2] << std::endl;
 		
 			// normalBuf[t*3 + 0] = cos(2 * t);
 			// normalBuf[t*3 + 1] = t;
 			// normalBuf[t*3 + 2] = sin(2*t);
-			t++;
-
-			vertexBuf[t*3 + 0] = ndx;
-			vertexBuf[t*3 + 1] = ndx;
-			vertexBuf[t*3 + 2] = 0;
-			std::cout << vertexBuf[t*3 + 0] << ", " << vertexBuf[t*3 + 1] << ", " << vertexBuf[t*3 + 2] << std::endl;
-		
-			// normalBuf[t*3 + 0] = cos(2 * t);
-			// normalBuf[t*3 + 1] = t;
-			// normalBuf[t*3 + 2] = 0;
 			t++;
 			k += 2;
 		}
@@ -229,7 +227,7 @@ public:
 		//set up the shaders to blur the FBO just a placeholder pass thru now
 		//next lab modify and possibly add other shaders to complete blur
 
-		target = vec3(1,0,0);
+		target = vec3(0,0,1);
 		up = vec3(0,1,0);
 		eyeVec = vec3(0,0,0);
 		pX = 0;
@@ -237,37 +235,69 @@ public:
 		prevX = 0;
 		prevY = 0;
 		prevZ = 0;
-		theta = 0;
+		theta = M_PI;
 		curX = curY = curZ = 0;
 		phi = 0;
-		glClearColor(0.12f, 0.34f, 0.56f, 0.0f);
+		glClearColor(0.33f, 0.101f, 0.545f, 0.0f);
 		time = 0;
 
-		sphere = std::make_shared<Program>();
-		sphere->setVerbose(true);
-		sphere->setShaderNames(resourceDirectory + "/simple_vert.glsl", resourceDirectory + "/simple_frag.glsl");
-		if (! sphere->init()) {
+		prog1 = std::make_shared<Program>();
+		prog1->setVerbose(true);
+		prog1->setShaderNames(resourceDirectory + "/trippy_vert.glsl", resourceDirectory + "/trippy_frag.glsl");
+		if (! prog1->init()) {
 			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
 			exit(1);
 		}
-		sphere->init();
-		sphere->addUniform("P");
-		sphere->addUniform("M");
-		sphere->addUniform("V");
-		sphere->addUniform("Time");
-		
+		prog1->init();
+		prog1->addUniform("P");
+		prog1->addUniform("M");
+		prog1->addUniform("V");
+		prog1->addUniform("Time");
+		prog1->addAttribute("vertPos");
+		prog1->addAttribute("vertNor");
+	 	
+		prog2 = std::make_shared<Program>();
+		prog2->setVerbose(true);
+		prog2->setShaderNames(resourceDirectory + "/simple_vert.1.glsl", resourceDirectory + "/simple_frag.1.glsl");
+		if (! prog2->init()) {
+			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
+			exit(1);
+		}
+		prog2->init();
+		prog2->addUniform("P");
+		prog2->addUniform("M");
+		prog2->addUniform("V");
+		prog2->addUniform("Time");
+		prog2->addAttribute("vertPos");
+		prog2->addAttribute("vertNor");	 
 
+		prog3 = std::make_shared<Program>();
+		prog3->setVerbose(true);
+		prog3->setShaderNames(resourceDirectory + "/simple_vert.2.glsl", resourceDirectory + "/simple_frag.2.glsl");
+		if (! prog3->init()) {
+			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
+			exit(1);
+		}
+		prog3->init();
+		prog3->addUniform("P");
+		prog3->addUniform("M");
+		prog3->addUniform("V");
+		prog3->addUniform("Time");
+		prog3->addAttribute("vertPos");
+		prog3->addAttribute("vertNor");	
 
-		sphere->addAttribute("vertPos");
-		sphere->addAttribute("vertNor");
+		progs[0] = prog1;
+		progs[1] = prog2;
+		progs[2] = prog3;
 	 }
+
 
 	void initGeom(const std::string& resourceDirectory)
 	{
-		GLfloat g_vertex_buffer_data[(NUM_SEGMENTS) * 6];
-		GLfloat normal_buffer[(NUM_SEGMENTS) * 6];
-		GLuint g_index_buffer_data[(NUM_SEGMENTS) * 6];
-		initSphere((GLfloat *)&g_vertex_buffer_data, (GLfloat *)&normal_buffer, (GLuint *)&g_index_buffer_data);
+		GLfloat g_vertex_buffer_data[(NUM_SEGMENTS) * 3];
+		GLfloat normal_buffer[(NUM_SEGMENTS) * 3];
+		GLuint g_index_buffer_data[(NUM_SEGMENTS) * 3];
+		initprog1((GLfloat *)&g_vertex_buffer_data, (GLfloat *)&normal_buffer, (GLuint *)&g_index_buffer_data);
 		
 		//generate the VAO
 		glGenVertexArrays(1, &VertexArrayID);
@@ -342,8 +372,8 @@ public:
 		auto P = make_shared<MatrixStack>();
 		auto M = make_shared<MatrixStack>();
 		auto V = make_shared<MatrixStack>();
-		//time = glfwGetTime();
-		time += 0.05;
+		time = glfwGetTime();
+		// time += 0.05;
 		// if (time - lastTime > 3) {
 		// 	cout << "time" << endl;
 		// 	lastTime = time;
@@ -353,40 +383,143 @@ public:
 
 
 		// }			glLineWidth(3);
+		for(int i = 0; i < NUM_SHADERS; i++) {
 
-		sphere->bind();
-		glUniform1f(sphere->getUniform("Time"), (GLfloat)time);
+			progs[i]->bind();
+			glUniform1f(progs[i]->getUniform("Time"), (GLfloat)time);
+			// Apply perspective projection.
+			P->pushMatrix();
+				P->perspective(70.0f, aspect, 0.01f, 100.0f);
+				glUniformMatrix4fv(progs[i]->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
+			P->popMatrix();
 
-		// Apply perspective projection.
-		P->pushMatrix();
-			P->perspective(70.0f, aspect, 0.01f, 100.0f);
-			glUniformMatrix4fv(sphere->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
-		P->popMatrix();
+			// //Draw our scene - two meshes - right now to a texture
+			
+			glEnable(GL_PROGRAM_POINT_SIZE);
+			//glEnable(GL_LINE_STIPPLE);
+			glEnable(GL_DEPTH_TEST);
+			
+			V->pushMatrix();
+				V->loadIdentity();
+				V->lookAt(eyeVec, eyeVec + target, up);
+				glUniformMatrix4fv(progs[i]->getUniform("V"), 1, GL_FALSE,value_ptr(V->topMatrix()) );
+			V->popMatrix();	
 
-		// //Draw our scene - two meshes - right now to a texture
+			M->pushMatrix();
+				M->loadIdentity();
+				M->rotate(radians(cTheta), vec3(0, 1, 0));
+				M->translate(vec3(0,0,0));
+				// M->scale(2);
+				glUniformMatrix4fv(progs[i]->getUniform("M"), 1, GL_FALSE,value_ptr(M->topMatrix()) );	
+				glBindVertexArray(VertexArrayID);	
+				// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				glDrawArrays(GL_POINTS, 0, NUM_SEGMENTS * 3 );
+			M->popMatrix();
+			
+			progs[i]->unbind();
+
+		}
+
+
+		// prog1->bind();
+		// glUniform1f(prog1->getUniform("Time"), (GLfloat)time);
+		// // Apply perspective projection.
+		// P->pushMatrix();
+		// 	P->perspective(70.0f, aspect, 0.01f, 100.0f);
+		// 	glUniformMatrix4fv(prog1->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
+		// P->popMatrix();
+
+		// // //Draw our scene - two meshes - right now to a texture
 		
-		//glEnable(GL_PROGRAM_POINT_SIZE);
-		//glEnable(GL_LINE_STIPPLE);
-		glEnable(GL_DEPTH_TEST);
+		// glEnable(GL_PROGRAM_POINT_SIZE);
+		// //glEnable(GL_LINE_STIPPLE);
+		// glEnable(GL_DEPTH_TEST);
 		
-		V->pushMatrix();
-			V->loadIdentity();
-			V->lookAt(eyeVec, eyeVec + target, up);
-			glUniformMatrix4fv(sphere->getUniform("V"), 1, GL_FALSE,value_ptr(V->topMatrix()) );
-		V->popMatrix();	
+		// V->pushMatrix();
+		// 	V->loadIdentity();
+		// 	V->lookAt(eyeVec, eyeVec + target, up);
+		// 	glUniformMatrix4fv(prog1->getUniform("V"), 1, GL_FALSE,value_ptr(V->topMatrix()) );
+		// V->popMatrix();	
 
-		M->pushMatrix();
-			M->loadIdentity();
-			//M->rotate(radians(cTheta), vec3(0, 1, 0));
-			M->translate(vec3(0,0,0));
-			// M->scale(2);
-			glUniformMatrix4fv(sphere->getUniform("M"), 1, GL_FALSE,value_ptr(M->topMatrix()) );	
-			glBindVertexArray(VertexArrayID);	
-			// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-			glDrawArrays(GL_LINES, 0, NUM_SEGMENTS * 6 );
-		M->popMatrix();
+		// M->pushMatrix();
+		// 	M->loadIdentity();
+		// 	M->rotate(radians(cTheta), vec3(0, 1, 0));
+		// 	M->translate(vec3(0,0,0));
+		// 	// M->scale(2);
+		// 	glUniformMatrix4fv(prog1->getUniform("M"), 1, GL_FALSE,value_ptr(M->topMatrix()) );	
+		// 	glBindVertexArray(VertexArrayID);	
+		// 	// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		// 	glDrawArrays(GL_POINTS, 0, NUM_SEGMENTS * 3 );
+		// M->popMatrix();
 		
-		sphere->unbind();
+		// prog1->unbind();
+
+
+		// prog2->bind();
+		// glUniform1f(prog2->getUniform("Time"), (GLfloat)time);
+		// // Apply perspective projection.
+		// P->pushMatrix();
+		// 	P->perspective(70.0f, aspect, 0.01f, 100.0f);
+		// 	glUniformMatrix4fv(prog2->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
+		// P->popMatrix();
+
+		// glEnable(GL_PROGRAM_POINT_SIZE);
+		// //glEnable(GL_LINE_STIPPLE);
+		// glEnable(GL_DEPTH_TEST);
+		
+		// V->pushMatrix();
+		// 	V->loadIdentity();
+		// 	V->lookAt(eyeVec, eyeVec + target, up);
+		// 	glUniformMatrix4fv(prog2->getUniform("V"), 1, GL_FALSE,value_ptr(V->topMatrix()) );
+		// V->popMatrix();	
+
+		// M->pushMatrix();
+		// 	M->loadIdentity();
+		// 	M->rotate(radians(cTheta), vec3(0, 1, 0));
+		// 	M->translate(vec3(0,0,0));
+		// 	// M->scale(2);
+		// 	glUniformMatrix4fv(prog2->getUniform("M"), 1, GL_FALSE,value_ptr(M->topMatrix()) );	
+		// 	glBindVertexArray(VertexArrayID);	
+		// 	// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		// 	glDrawArrays(GL_POINTS, 0, NUM_SEGMENTS * 3 );
+		// M->popMatrix();
+		
+		// prog2->unbind();
+		
+
+		// prog3->bind();
+		// glUniform1f(prog3->getUniform("Time"), (GLfloat)time);
+		// // Apply perspective projection.
+		// P->pushMatrix();
+		// 	P->perspective(70.0f, aspect, 0.01f, 100.0f);
+		// 	glUniformMatrix4fv(prog3->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
+		// P->popMatrix();
+
+		// // //Draw our scene - two meshes - right now to a texture
+		
+		// glEnable(GL_PROGRAM_POINT_SIZE);
+		// //glEnable(GL_LINE_STIPPLE);
+		// glEnable(GL_DEPTH_TEST);
+		
+		// V->pushMatrix();
+		// 	V->loadIdentity();
+		// 	V->lookAt(eyeVec, eyeVec + target, up);
+		// 	glUniformMatrix4fv(prog3->getUniform("V"), 1, GL_FALSE,value_ptr(V->topMatrix()) );
+		// V->popMatrix();	
+
+		// M->pushMatrix();
+		// 	M->loadIdentity();
+		// 	M->rotate(radians(cTheta), vec3(0, 1, 0));
+		// 	M->translate(vec3(0,0,0));
+		// 	// M->scale(2);
+		// 	glUniformMatrix4fv(prog3->getUniform("M"), 1, GL_FALSE,value_ptr(M->topMatrix()) );	
+		// 	glBindVertexArray(VertexArrayID);	
+		// 	// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		// 	glDrawArrays(GL_POINTS, 0, NUM_SEGMENTS * 3 );
+		// M->popMatrix();
+		
+		// prog3->unbind();
+
 		glBindVertexArray(0);
 
 	}
